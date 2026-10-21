@@ -134,7 +134,7 @@
         <button onclick="toggleSidebar()" class="text-xl p-2 focus:outline-none"><i class="fa-solid fa-bars"></i></button>
         <h1 class="text-base font-bold text-[#4cc9f0]">IIST ERP PRO</h1>
         <div id="syncStatusBadge" class="text-xs px-2 py-1 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-            <i class="fa-solid fa-hard-drive"></i> Local Active
+            <i class="fa-solid fa-cloud text-emerald-400"></i> Auto Live Sync
         </div>
     </header>
 
@@ -147,7 +147,7 @@
 
         <div class="mb-4 text-center">
             <span id="sidebarSyncBadge" class="inline-flex items-center gap-2 text-xs px-3 py-1 rounded-full bg-emerald-900/60 text-emerald-200 border border-emerald-500/30">
-                <i class="fa-solid fa-database text-emerald-400"></i> Local Storage Active
+                <i class="fa-solid fa-cloud-arrow-up text-emerald-400"></i> Auto Sync Active
             </span>
         </div>
 
@@ -162,7 +162,7 @@
             <br>
             <!-- Sync Data to Cloud API Button -->
             <button onclick="syncAllWithApi()" style="color: #2ecc71; font-size: 12px; border: 1px dashed #2ecc71; background: rgba(46, 204, 113, 0.1); margin-top: 10px;">
-                <i class="fa-solid fa-cloud-arrow-up"></i> Sync Data with API
+                <i class="fa-solid fa-cloud-arrow-up"></i> Manual Cloud Sync
             </button>
             
             <button onclick="secureReset()" style="color: #ff4d4d; font-size: 12px; border: 1px dashed #ff4d4d; background: rgba(255, 77, 77, 0.05); margin-top: 10px;">
@@ -554,15 +554,17 @@
             return url;
         }
 
-        window.syncAllWithApi = async function() {
+        // Automatic Background Sync to Cloud API
+        window.syncAllWithApi = async function(isSilent = false) {
             const url = getFullApiUrl('storeData');
             if (!url) {
-                alert("Please configure your API Base URL first in API Sync Settings!");
-                window.showSection('apiSettings');
+                if(!isSilent) {
+                    alert("Please configure your API Base URL first in API Sync Settings!");
+                    window.showSection('apiSettings');
+                }
                 return;
             }
 
-            logApiMessage("Pushing local data to Cloud API...");
             try {
                 const payload = {
                     inventory: window.inventory,
@@ -580,47 +582,61 @@
                 });
 
                 if (res.ok) {
-                    logApiMessage("Cloud API Sync successful!");
-                    alert("Local Data successfully synced with API Cloud Database!");
+                    if(!isSilent) {
+                        logApiMessage("Cloud API Sync successful!");
+                        alert("Local Data successfully synced with API Cloud Database!");
+                    }
                 } else {
                     throw new Error(`Server responded with HTTP ${res.status}`);
                 }
             } catch (err) {
-                logApiMessage("Sync failed: " + err.message);
-                alert("API Sync Failed: " + err.message);
+                if(!isSilent) {
+                    logApiMessage("Sync failed: " + err.message);
+                }
             }
         };
 
-        window.fetchDataFromApi = async function() {
+        // Automatic Background Fetch from Cloud API
+        window.fetchDataFromApi = async function(isSilent = false) {
             const url = getFullApiUrl('storeData');
-            if (!url) {
-                alert("Please configure your API Base URL first in API Sync Settings!");
-                return;
-            }
+            if (!url) return;
 
-            logApiMessage("Fetching latest data from Cloud API...");
             try {
                 const res = await fetch(url);
                 if (!res.ok) throw new Error(`HTTP Error ${res.status}`);
 
                 const data = await res.json();
                 if (data) {
-                    if (data.inventory) window.inventory = data.inventory;
-                    if (data.invoiceHistory) window.invoiceHistory = data.invoiceHistory;
-                    if (data.reloadHistory) window.reloadHistory = data.reloadHistory;
-                    if (data.companyPayments) window.companyPayments = data.companyPayments;
-                    if (data.invoiceCounter) window.invoiceCounter = data.invoiceCounter;
+                    let hasChanged = false;
+                    if (data.inventory && JSON.stringify(data.inventory) !== JSON.stringify(window.inventory)) {
+                        window.inventory = data.inventory;
+                        hasChanged = true;
+                    }
+                    if (data.invoiceHistory && JSON.stringify(data.invoiceHistory) !== JSON.stringify(window.invoiceHistory)) {
+                        window.invoiceHistory = data.invoiceHistory;
+                        hasChanged = true;
+                    }
+                    if (data.reloadHistory && JSON.stringify(data.reloadHistory) !== JSON.stringify(window.reloadHistory)) {
+                        window.reloadHistory = data.reloadHistory;
+                        hasChanged = true;
+                    }
+                    if (data.companyPayments && JSON.stringify(data.companyPayments) !== JSON.stringify(window.companyPayments)) {
+                        window.companyPayments = data.companyPayments;
+                        hasChanged = true;
+                    }
+                    if (data.invoiceCounter && data.invoiceCounter !== window.invoiceCounter) {
+                        window.invoiceCounter = data.invoiceCounter;
+                        hasChanged = true;
+                    }
 
-                    window.saveToLocalStorage();
-                    refreshUI();
-                    logApiMessage("Successfully pulled data from API!");
-                    alert("Data downloaded from API Cloud & applied!");
-                } else {
-                    logApiMessage("No existing data found at endpoint.");
+                    if(hasChanged) {
+                        window.saveToLocalStorage();
+                        refreshUI();
+                        if(!isSilent) logApiMessage("Auto-fetched latest data from cloud!");
+                    }
                 }
             } catch (err) {
-                logApiMessage("Fetch failed: " + err.message);
-                alert("Failed to fetch API data: " + err.message);
+                // Silent fail for background polling
             }
         };
 
@@ -648,6 +664,9 @@
             localStorage.setItem('iist_reload_history', JSON.stringify(window.reloadHistory));
             localStorage.setItem('iist_company_payments', JSON.stringify(window.companyPayments));
             localStorage.setItem('iist_inv_counter', window.invoiceCounter);
+            
+            // Trigger background silent sync whenever local storage changes
+            window.syncAllWithApi(true);
         };
 
         function refreshUI() {
@@ -685,6 +704,14 @@
             loadDirectFromLocalStorage();
             document.getElementById('displayInvNo').innerText = 'IIST-' + window.invoiceCounter;
             refreshUI();
+
+            // Initial fetch from cloud on load
+            window.fetchDataFromApi(true);
+
+            // Setup Auto-Fetch interval every 5 seconds for live mobile syncing without refreshing
+            setInterval(() => {
+                window.fetchDataFromApi(true);
+            }, 5000);
         };
 
         window.secureReset = function() {

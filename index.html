@@ -98,27 +98,14 @@
 
         #reader { width: 100%; max-width: 380px; margin: 0 auto; border-radius: 8px; overflow: hidden; }
 
-        /* Screen Receipt Preview */
+        /* Thermal Printing CSS */
         #printable-invoice { display: none; }
-
-        /* Mobile Overlay for Sidebar */
         #sidebar-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 90; }
 
-        /* Thermal Printing Optimized CSS */
         @media print {
-            @page {
-                size: 80mm auto;
-                margin: 0;
-            }
-            body {
-                margin: 0;
-                padding: 0;
-                background: #fff !important;
-                color: #000 !important;
-            }
-            aside, main, .no-print, header, nav, button, #mobile-header { 
-                display: none !important; 
-            } 
+            @page { size: 80mm auto; margin: 0; }
+            body { margin: 0; padding: 0; background: #fff !important; color: #000 !important; }
+            aside, main, .no-print, header, nav, button, #mobile-header { display: none !important; } 
             #printable-invoice { 
                 display: block !important; 
                 width: 78mm !important;
@@ -128,13 +115,8 @@
                 font-size: 12px !important;
                 line-height: 1.2 !important;
             }
-            #printable-invoice table {
-                width: 100% !important;
-                border-collapse: collapse !important;
-            }
-            #printable-invoice th, #printable-invoice td {
-                padding: 3px 0 !important;
-            }
+            #printable-invoice table { width: 100% !important; border-collapse: collapse !important; }
+            #printable-invoice th, #printable-invoice td { padding: 3px 0 !important; }
         }
         
         @media (max-width: 992px) {
@@ -147,7 +129,6 @@
 </head>
 <body class="min-h-screen">
 
-    <!-- Mobile Header -->
     <header id="mobile-header" class="no-print lg:hidden fixed top-0 left-0 right-0 h-14 bg-[#1e1e2d] text-white flex items-center justify-between px-4 z-50 shadow-md">
         <button onclick="toggleSidebar()" class="text-xl p-2 focus:outline-none"><i class="fa-solid fa-bars"></i></button>
         <h1 class="text-base font-bold text-[#4cc9f0]">IIST ERP PRO</h1>
@@ -156,7 +137,6 @@
         </div>
     </header>
 
-    <!-- Mobile Overlay -->
     <div id="sidebar-overlay" onclick="toggleSidebar()"></div>
 
     <!-- Sidebar Navigation -->
@@ -164,7 +144,6 @@
         <h2>IIST ERP PRO</h2>
         <p>Institute of Informatic Skill Tech</p>
 
-        <!-- Cloud Sync Badge inside Sidebar -->
         <div class="mb-4 text-center">
             <span id="sidebarSyncBadge" class="inline-flex items-center gap-2 text-xs px-3 py-1 rounded-full bg-blue-900/60 text-blue-200 border border-blue-500/30">
                 <i class="fa-solid fa-sync fa-spin"></i> Syncing Cloud...
@@ -179,7 +158,12 @@
             <button id="nav-reload" onclick="showSection('reloadSystem')"><i class="fa-solid fa-mobile-screen-button"></i> Reload System</button>
             <button id="nav-reports" onclick="showSection('reports')"><i class="fa-solid fa-chart-pie"></i> Monthly Reports</button>
             <br>
-            <button onclick="secureReset()" style="color: #ff4d4d; font-size: 12px; border: 1px dashed #ff4d4d; background: rgba(255, 77, 77, 0.05); margin-top: 15px;">
+            <!-- Push Local Data to Cloud Button -->
+            <button onclick="pushLocalToFirebase()" style="color: #2ecc71; font-size: 12px; border: 1px dashed #2ecc71; background: rgba(46, 204, 113, 0.1); margin-top: 10px;">
+                <i class="fa-solid fa-cloud-arrow-up"></i> Push Local Data to Cloud
+            </button>
+            
+            <button onclick="secureReset()" style="color: #ff4d4d; font-size: 12px; border: 1px dashed #ff4d4d; background: rgba(255, 77, 77, 0.05); margin-top: 10px;">
                 <i class="fa-solid fa-arrow-rotate-left"></i> System Reset
             </button>
         </nav>
@@ -265,7 +249,6 @@
         <section id="billing" class="card" style="display:none;">
             <div class="pos-grid">
                 <div>
-                    <!-- Customer Section -->
                     <div class="card" style="margin-bottom: 15px;">
                         <div class="card-title" style="font-size: 14px;"><i class="fa-solid fa-user"></i> Customer Info</div>
                         <div class="form-grid" style="margin-bottom: 0;">
@@ -274,7 +257,6 @@
                         </div>
                     </div>
 
-                    <!-- Items Selection Section -->
                     <div class="card">
                         <div class="card-title" style="justify-content: space-between;">
                             <span><i class="fa-solid fa-cart-plus"></i> Item Selection</span>
@@ -312,7 +294,6 @@
                     </div>
                 </div>
 
-                <!-- Checkout Summary Card -->
                 <div>
                     <div class="card">
                         <div class="card-title"><i class="fa-solid fa-file-invoice-dollar"></i> Bill Summary</div>
@@ -342,7 +323,6 @@
                             </div>
                         </div>
 
-                        <!-- Save and Print Options -->
                         <div style="margin-top: 20px; display: flex; flex-direction: column; gap: 10px;">
                             <button class="btn btn-success btn-block" onclick="processInvoice(true)"><i class="fa-solid fa-print"></i> Print & Complete Sale</button>
                             <button class="btn btn-info btn-block" onclick="processInvoice(false)"><i class="fa-solid fa-floppy-disk"></i> Only Save Order</button>
@@ -478,7 +458,7 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, setDoc, onSnapshot, collection } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // Global State
         window.inventory = [];
@@ -494,15 +474,17 @@
 
         // Firebase Configuration Setup
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'iist-erp-prod';
-        const firebaseConfig = {
-  apiKey: "AIzaSyCtXItkY8Tgq1btqf5xOo-60Y9Obglm5nk",
-  authDomain: "invoice-3d4b5.firebaseapp.com",
-  projectId: "invoice-3d4b5",
-  storageBucket: "invoice-3d4b5.firebasestorage.app",
-  messagingSenderId: "789269267021",
-  appId: "1:789269267021:web:5a3a1fdcf18ba2ffa59204",
-  measurementId: "G-EYM61FGYPB"
-};
+        const firebaseConfig = typeof __firebase_config !== 'undefined' 
+            ? JSON.parse(__firebase_config) 
+            : {
+                apiKey: "AIzaSyDemoKeyOnlyForFallback1234567890",
+                authDomain: "iist-erp-demo.firebaseapp.com",
+                projectId: "iist-erp-demo",
+                storageBucket: "iist-erp-demo.appspot.com",
+                messagingSenderId: "123456789012",
+                appId: "1:123456789012:web:demo"
+            };
+
         let app, auth, db, currentUser = null;
 
         try {
@@ -510,7 +492,6 @@
             auth = getAuth(app);
             db = getFirestore(app);
             
-            // Authentication initialization
             if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
                 signInWithCustomToken(auth, __initial_auth_token).catch(() => signInAnonymously(auth));
             } else {
@@ -566,7 +547,6 @@
                     window.companyPayments = data.companyPayments || [];
                     window.invoiceCounter = data.invoiceCounter || 1001;
                 } else {
-                    // Seed initial data to Firestore if doc empty
                     loadFromLocalStorage();
                     syncToFirebase();
                 }
@@ -580,7 +560,6 @@
 
         // Save application state to Firestore and LocalStorage
         window.syncToFirebase = async function() {
-            // Backup to LocalStorage always
             localStorage.setItem('iist_erp_inventory', JSON.stringify(window.inventory));
             localStorage.setItem('iist_invoice_history', JSON.stringify(window.invoiceHistory));
             localStorage.setItem('iist_reload_history', JSON.stringify(window.reloadHistory));
@@ -659,6 +638,32 @@
             }
         };
 
+        // Push Local Storage Data to Firebase Cloud
+        window.pushLocalToFirebase = async function() {
+            if (!currentUser) {
+                alert("Firebase ஆன்லைனில் இல்லை அல்லது இணைக்கப்படவில்லை! இணைய இணைப்பை சரிபார்க்கவும்.");
+                return;
+            }
+
+            loadFromLocalStorage();
+
+            if (window.inventory.length === 0 && window.invoiceHistory.length === 0 && window.reloadHistory.length === 0) {
+                alert("உங்கள் Local Storage-இல் மாற்றுவதற்கு எந்த தரவும் (Data) இல்லை!");
+                return;
+            }
+
+            if (confirm("உங்கள் Local Storage தரவுகளை Firebase Cloud-க்கு ஏற்ற விரும்புகிறீர்களா?")) {
+                try {
+                    await window.syncToFirebase();
+                    refreshUI();
+                    alert("வெற்றிகரமாக Local Storage தரவுகள் அனைத்தும் Firebase Cloud-இல் பதிவேற்றப்பட்டன! 🎉");
+                } catch (e) {
+                    console.error("Migration Error:", e);
+                    alert("அப்லோட் செய்வதில் பிழை ஏற்பட்டது: " + e.message);
+                }
+            }
+        };
+
         window.showSection = function(id) {
             const sections = ['dashboard', 'inventory', 'billing', 'invoiceHistory', 'reloadSystem', 'reports'];
             sections.forEach(s => document.getElementById(s).style.display = s === id ? 'block' : 'none');
@@ -677,7 +682,6 @@
             if(navMap[id]) document.getElementById(navMap[id]).classList.add('active');
             document.getElementById('page-title').innerText = id.toUpperCase().replace('SYSTEM', ' SYSTEM');
             
-            // Close mobile menu if open
             const sidebar = document.getElementById('sidebar');
             if(sidebar.classList.contains('open')) window.toggleSidebar();
 

@@ -255,7 +255,7 @@
                         <div class="card-title" style="font-size: 14px;"><i class="fa-solid fa-user"></i> Customer Info</div>
                         <div class="form-grid" style="margin-bottom: 0;">
                             <input type="text" id="custName" placeholder="Customer Name">
-                            <input type="text" id="custPhone" placeholder="Phone Number">
+                            <input type="text" id="custPhone" placeholder="Phone Number (e.g. 0771234567)">
                         </div>
                     </div>
 
@@ -347,6 +347,7 @@
                         <tr>
                             <th>Inv ID</th>
                             <th>Customer</th>
+                            <th>Phone</th>
                             <th>Items Sold</th>
                             <th>Net Total</th>
                             <th>Paid</th>
@@ -461,6 +462,7 @@
         <p style="margin: 2px 0;"><strong>Inv:</strong> <span id="printInvNo"></span></p>
         <p style="margin: 2px 0;"><strong>Date:</strong> <span id="printDate"></span></p>
         <p style="margin: 2px 0;"><strong>Cust:</strong> <span id="printCustName"></span></p>
+        <p style="margin: 2px 0;"><strong>Phone:</strong> <span id="printCustPhone"></span></p>
         <p style="margin: 4px 0; border-top: 1px dashed #000;"></p>
         <table style="width: 100%; border: none;">
             <thead>
@@ -505,6 +507,20 @@
 
         const SYSTEM_PASS = "admin123";
 
+        // Send Bill to Customer via WhatsApp
+        function sendBillToCustomerWhatsApp(phone, custName, invId, netTotal, itemNames) {
+            if (!phone) return;
+            let cleanPhone = phone.replace(/[^0-9]/g, '');
+            if (cleanPhone.startsWith('0')) {
+                cleanPhone = '94' + cleanPhone.substring(1);
+            }
+
+            const message = `வணக்கம் ${custName}! IIST ERP Pro-விலிருந்து உங்களது பில் விவரங்கள்:\n\n*Invoice No:* ${invId}\n*Items:* ${itemNames}\n*Net Total:* LKR ${netTotal}\n\nநன்றி! மீண்டும் வருக!`;
+            const encodedMsg = encodeURIComponent(message);
+            const whatsappUrl = `https://wa.me/${cleanPhone}?text=${encodedMsg}`;
+            window.open(whatsappUrl, '_blank');
+        }
+
         function logApiMessage(msg) {
             const consoleLog = document.getElementById('apiConsoleLog');
             if (consoleLog) {
@@ -519,7 +535,6 @@
             if (url.endsWith('/')) url = url.slice(0, -1);
             
             const key = document.getElementById('apiAuthToken').value.trim();
-            
             window.apiConfig.baseUrl = url;
             window.apiConfig.authKey = key;
 
@@ -609,11 +624,9 @@
             }
         };
 
-        // Direct scan and recovery of ALL possible Local Storage Keys
         function loadDirectFromLocalStorage() {
             try {
-                // Check all known keys
-                const invData = localStorage.getItem('iist_erp_inventory') || localStorage.getItem('inventory') || localStorage.getItem('iist_inventory');
+                const invData = localStorage.getItem('iist_erp_inventory') || localStorage.getItem('inventory');
                 const salesData = localStorage.getItem('iist_invoice_history') || localStorage.getItem('invoiceHistory');
                 const relData = localStorage.getItem('iist_reload_history') || localStorage.getItem('reloadHistory');
                 const compData = localStorage.getItem('iist_company_payments') || localStorage.getItem('companyPayments');
@@ -624,14 +637,11 @@
                 if (relData) window.reloadHistory = JSON.parse(relData);
                 if (compData) window.companyPayments = JSON.parse(compData);
                 if (countData) window.invoiceCounter = parseInt(countData) || 1001;
-
-                console.log("Loaded Inventory count:", window.inventory.length);
             } catch (e) {
                 console.error("Local Storage reading error:", e);
             }
         }
 
-        // Save local state
         window.saveToLocalStorage = function() {
             localStorage.setItem('iist_erp_inventory', JSON.stringify(window.inventory));
             localStorage.setItem('iist_invoice_history', JSON.stringify(window.invoiceHistory));
@@ -672,7 +682,6 @@
                 document.getElementById('apiAuthToken').value = window.apiConfig.authKey;
             }
 
-            // Force immediate local storage recovery
             loadDirectFromLocalStorage();
             document.getElementById('displayInvNo').innerText = 'IIST-' + window.invoiceCounter;
             refreshUI();
@@ -695,11 +704,6 @@
             } else if (pass !== null) {
                 alert("Incorrect Password!");
             }
-        };
-
-        // Push Local Storage Data to Cloud API
-        window.pushLocalToFirebase = function() {
-            window.syncAllWithApi();
         };
 
         window.showSection = function(id) {
@@ -970,6 +974,7 @@
             }
             
             const custName = document.getElementById('custName').value.trim() || 'Guest Customer';
+            const custPhone = document.getElementById('custPhone').value.trim() || '';
             const totals = window.calculateTotals();
             const invId = 'IIST-' + window.invoiceCounter;
             const dateStr = new Date().toLocaleString('en-GB');
@@ -978,6 +983,7 @@
             window.invoiceHistory.unshift({
                 invId,
                 customer: custName,
+                phone: custPhone,
                 itemNames: itemNamesStr,
                 total: totals.netTotal,
                 netTotal: totals.netTotal.toFixed(2),
@@ -990,10 +996,16 @@
             window.invoiceCounter++;
             window.saveToLocalStorage();
 
+            // Send WhatsApp Bill to Customer if phone is provided
+            if(custPhone) {
+                sendBillToCustomerWhatsApp(custPhone, custName, invId, totals.netTotal.toFixed(2), itemNamesStr);
+            }
+
             if (shouldPrint) {
                 document.getElementById('printInvNo').innerText = invId;
                 document.getElementById('printDate').innerText = dateStr;
                 document.getElementById('printCustName').innerText = custName;
+                document.getElementById('printCustPhone').innerText = custPhone;
                 document.getElementById('printSubTotal').innerText = totals.subtotal.toFixed(2);
                 document.getElementById('printDiscount').innerText = totals.discount.toFixed(2);
                 document.getElementById('printNetTotal').innerText = totals.netTotal.toFixed(2);
@@ -1081,7 +1093,7 @@
             body.innerHTML = '';
             
             if (window.invoiceHistory.length === 0) {
-                body.innerHTML = '<tr><td colspan="7" style="text-align:center; color:#64748b;">No sale history found.</td></tr>';
+                body.innerHTML = '<tr><td colspan="8" style="text-align:center; color:#64748b;">No sale history found.</td></tr>';
                 return;
             }
 
@@ -1089,6 +1101,7 @@
                 body.innerHTML += `<tr>
                     <td><strong>${inv.invId || ('INV-'+i)}</strong></td>
                     <td>${inv.customer || 'Guest'}</td>
+                    <td>${inv.phone || '-'}</td>
                     <td style="font-size:12px; color:#475569;">${inv.itemNames || ''}</td>
                     <td><strong>ரூ. ${inv.netTotal || inv.total || 0}</strong></td>
                     <td>${inv.paid || '0.00'}</td>

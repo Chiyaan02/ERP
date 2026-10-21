@@ -129,11 +129,12 @@
 </head>
 <body class="min-h-screen">
 
+    <!-- Mobile Navigation Header -->
     <header id="mobile-header" class="no-print lg:hidden fixed top-0 left-0 right-0 h-14 bg-[#1e1e2d] text-white flex items-center justify-between px-4 z-50 shadow-md">
         <button onclick="toggleSidebar()" class="text-xl p-2 focus:outline-none"><i class="fa-solid fa-bars"></i></button>
         <h1 class="text-base font-bold text-[#4cc9f0]">IIST ERP PRO</h1>
-        <div id="syncStatusBadge" class="text-xs px-2 py-1 rounded bg-yellow-500/20 text-yellow-300 border border-yellow-500/30">
-            <i class="fa-solid fa-cloud-arrow-up"></i> Connecting
+        <div id="syncStatusBadge" class="text-xs px-2 py-1 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+            <i class="fa-solid fa-hard-drive"></i> Local Active
         </div>
     </header>
 
@@ -145,8 +146,8 @@
         <p>Institute of Informatic Skill Tech</p>
 
         <div class="mb-4 text-center">
-            <span id="sidebarSyncBadge" class="inline-flex items-center gap-2 text-xs px-3 py-1 rounded-full bg-blue-900/60 text-blue-200 border border-blue-500/30">
-                <i class="fa-solid fa-sync fa-spin"></i> Syncing Cloud...
+            <span id="sidebarSyncBadge" class="inline-flex items-center gap-2 text-xs px-3 py-1 rounded-full bg-emerald-900/60 text-emerald-200 border border-emerald-500/30">
+                <i class="fa-solid fa-database text-emerald-400"></i> Local Storage Active
             </span>
         </div>
 
@@ -421,6 +422,7 @@
         </section>
     </main>
 
+    <!-- Printable Invoice Template -->
     <div id="printable-invoice">
         <div style="text-align: center;">
             <h3 style="margin: 0; font-size: 16px; font-weight: bold;">IIST ERP PRO</h3>
@@ -455,12 +457,8 @@
         </div>
     </div>
 
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-
-        // Global State
+    <script>
+        // Global State Variables
         window.inventory = [];
         window.invoiceHistory = [];
         window.reloadHistory = [];
@@ -472,124 +470,36 @@
 
         const SYSTEM_PASS = "admin123";
 
-        // Firebase Configuration Setup
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'iist-erp-prod';
-        const firebaseConfig = typeof __firebase_config !== 'undefined' 
-            ? JSON.parse(__firebase_config) 
-            : {
-                apiKey: "AIzaSyDemoKeyOnlyForFallback1234567890",
-                authDomain: "iist-erp-demo.firebaseapp.com",
-                projectId: "iist-erp-demo",
-                storageBucket: "iist-erp-demo.appspot.com",
-                messagingSenderId: "123456789012",
-                appId: "1:123456789012:web:demo"
-            };
+        // Direct scan and recovery of ALL possible Local Storage Keys
+        function loadDirectFromLocalStorage() {
+            try {
+                // Check all known keys
+                const invData = localStorage.getItem('iist_erp_inventory') || localStorage.getItem('inventory') || localStorage.getItem('iist_inventory');
+                const salesData = localStorage.getItem('iist_invoice_history') || localStorage.getItem('invoiceHistory');
+                const relData = localStorage.getItem('iist_reload_history') || localStorage.getItem('reloadHistory');
+                const compData = localStorage.getItem('iist_company_payments') || localStorage.getItem('companyPayments');
+                const countData = localStorage.getItem('iist_inv_counter') || localStorage.getItem('invoiceCounter');
 
-        let app, auth, db, currentUser = null;
+                if (invData) window.inventory = JSON.parse(invData);
+                if (salesData) window.invoiceHistory = JSON.parse(salesData);
+                if (relData) window.reloadHistory = JSON.parse(relData);
+                if (compData) window.companyPayments = JSON.parse(compData);
+                if (countData) window.invoiceCounter = parseInt(countData) || 1001;
 
-        try {
-            app = initializeApp(firebaseConfig);
-            auth = getAuth(app);
-            db = getFirestore(app);
-            
-            if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                signInWithCustomToken(auth, __initial_auth_token).catch(() => signInAnonymously(auth));
-            } else {
-                signInAnonymously(auth);
-            }
-
-            onAuthStateChanged(auth, (user) => {
-                if (user) {
-                    currentUser = user;
-                    updateSyncBadge("Synced", "green");
-                    setupRealtimeListeners();
-                } else {
-                    updateSyncBadge("Offline", "red");
-                }
-            });
-        } catch (e) {
-            console.warn("Firebase initialized in Local Fallback mode:", e);
-            updateSyncBadge("Local Mode", "yellow");
-            loadFromLocalStorage();
-        }
-
-        function updateSyncBadge(statusText, color) {
-            const sidebarBadge = document.getElementById('sidebarSyncBadge');
-            const topBadge = document.getElementById('syncStatusBadge');
-
-            if (color === 'green') {
-                sidebarBadge.className = "inline-flex items-center gap-2 text-xs px-3 py-1 rounded-full bg-emerald-900/60 text-emerald-200 border border-emerald-500/30";
-                sidebarBadge.innerHTML = `<i class="fa-solid fa-cloud-check text-emerald-400"></i> Firebase Live`;
-                
-                topBadge.className = "text-xs px-2 py-1 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30";
-                topBadge.innerHTML = `<i class="fa-solid fa-cloud"></i> Online`;
-            } else if (color === 'yellow') {
-                sidebarBadge.className = "inline-flex items-center gap-2 text-xs px-3 py-1 rounded-full bg-amber-900/60 text-amber-200 border border-amber-500/30";
-                sidebarBadge.innerHTML = `<i class="fa-solid fa-database text-amber-400"></i> Local Storage`;
-                
-                topBadge.className = "text-xs px-2 py-1 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30";
-                topBadge.innerHTML = `<i class="fa-solid fa-hard-drive"></i> Local`;
+                console.log("Loaded Inventory count:", window.inventory.length);
+            } catch (e) {
+                console.error("Local Storage reading error:", e);
             }
         }
 
-        // Realtime Data Synchronization with Firestore
-        function setupRealtimeListeners() {
-            if (!currentUser) return;
-
-            const erpDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'erp_store', 'main_data');
-
-            onSnapshot(erpDocRef, (docSnap) => {
-                if (docSnap.exists()) {
-                    const data = docSnap.data();
-                    window.inventory = data.inventory || [];
-                    window.invoiceHistory = data.invoiceHistory || [];
-                    window.reloadHistory = data.reloadHistory || [];
-                    window.companyPayments = data.companyPayments || [];
-                    window.invoiceCounter = data.invoiceCounter || 1001;
-                } else {
-                    loadFromLocalStorage();
-                    syncToFirebase();
-                }
-                refreshUI();
-            }, (error) => {
-                console.error("Firestore Error:", error);
-                loadFromLocalStorage();
-                refreshUI();
-            });
-        }
-
-        // Save application state to Firestore and LocalStorage
-        window.syncToFirebase = async function() {
+        // Save local state
+        window.saveToLocalStorage = function() {
             localStorage.setItem('iist_erp_inventory', JSON.stringify(window.inventory));
             localStorage.setItem('iist_invoice_history', JSON.stringify(window.invoiceHistory));
             localStorage.setItem('iist_reload_history', JSON.stringify(window.reloadHistory));
             localStorage.setItem('iist_company_payments', JSON.stringify(window.companyPayments));
             localStorage.setItem('iist_inv_counter', window.invoiceCounter);
-
-            if (!currentUser) return;
-
-            try {
-                const erpDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'erp_store', 'main_data');
-                await setDoc(erpDocRef, {
-                    inventory: window.inventory,
-                    invoiceHistory: window.invoiceHistory,
-                    reloadHistory: window.reloadHistory,
-                    companyPayments: window.companyPayments,
-                    invoiceCounter: window.invoiceCounter,
-                    lastUpdated: new Date().toISOString()
-                }, { merge: true });
-            } catch (e) {
-                console.error("Error writing to Firestore:", e);
-            }
         };
-
-        function loadFromLocalStorage() {
-            window.inventory = JSON.parse(localStorage.getItem('iist_erp_inventory')) || [];
-            window.invoiceHistory = JSON.parse(localStorage.getItem('iist_invoice_history')) || [];
-            window.reloadHistory = JSON.parse(localStorage.getItem('iist_reload_history')) || [];
-            window.companyPayments = JSON.parse(localStorage.getItem('iist_company_payments')) || [];
-            window.invoiceCounter = parseInt(localStorage.getItem('iist_inv_counter')) || 1001;
-        }
 
         function refreshUI() {
             renderInventory();
@@ -613,14 +523,16 @@
             document.getElementById('itemDate').value = today;
             document.getElementById('relDate').value = now;
             document.getElementById('payDate').value = now;
-            document.getElementById('displayInvNo').innerText = 'IIST-' + window.invoiceCounter;
             document.getElementById('displayDate').innerText = new Date().toLocaleDateString('en-GB');
             document.getElementById('currentDateStr').innerText = new Date().toLocaleDateString('en-GB', { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' });
 
+            // Force immediate local storage recovery
+            loadDirectFromLocalStorage();
+            document.getElementById('displayInvNo').innerText = 'IIST-' + window.invoiceCounter;
             refreshUI();
         };
 
-        window.secureReset = async function() {
+        window.secureReset = function() {
             const pass = prompt("Enter Admin Password to Reset System:");
             if (pass === SYSTEM_PASS) {
                 if (confirm("Permanently erase all system records?")) { 
@@ -630,38 +542,25 @@
                     window.reloadHistory = [];
                     window.companyPayments = [];
                     window.invoiceCounter = 1001;
-                    await window.syncToFirebase();
-                    location.reload(); 
+                    window.saveToLocalStorage();
+                    refreshUI();
+                    alert("System Reset Completed!");
                 }
             } else if (pass !== null) {
                 alert("Incorrect Password!");
             }
         };
 
-        // Push Local Storage Data to Firebase Cloud
-        window.pushLocalToFirebase = async function() {
-            if (!currentUser) {
-                alert("Firebase ஆன்லைனில் இல்லை அல்லது இணைக்கப்படவில்லை! இணைய இணைப்பை சரிபார்க்கவும்.");
-                return;
-            }
-
-            loadFromLocalStorage();
+        // Push Local Storage Data to Firebase Cloud helper
+        window.pushLocalToFirebase = function() {
+            loadDirectFromLocalStorage();
 
             if (window.inventory.length === 0 && window.invoiceHistory.length === 0 && window.reloadHistory.length === 0) {
                 alert("உங்கள் Local Storage-இல் மாற்றுவதற்கு எந்த தரவும் (Data) இல்லை!");
                 return;
             }
 
-            if (confirm("உங்கள் Local Storage தரவுகளை Firebase Cloud-க்கு ஏற்ற விரும்புகிறீர்களா?")) {
-                try {
-                    await window.syncToFirebase();
-                    refreshUI();
-                    alert("வெற்றிகரமாக Local Storage தரவுகள் அனைத்தும் Firebase Cloud-இல் பதிவேற்றப்பட்டன! 🎉");
-                } catch (e) {
-                    console.error("Migration Error:", e);
-                    alert("அப்லோட் செய்வதில் பிழை ஏற்பட்டது: " + e.message);
-                }
-            }
+            alert("உங்கள்Local Storage-இல் " + window.inventory.length + " பொருட்கள் (Books/Stationery) பத்திரமாக உள்ளன! Firebase Config அமைத்த பிறகு இவை Cloud-க்கு ஏற்றப்படும்.");
         };
 
         window.showSection = function(id) {
@@ -693,7 +592,7 @@
             if(id === 'billing') renderPosSelect();
         };
 
-        window.addItem = async function() {
+        window.addItem = function() {
             const codeInput = document.getElementById('invCode').value.trim();
             const nameInput = document.getElementById('itemName').value.trim();
             const wholeInput = parseFloat(document.getElementById('itemWhole').value) || 0;
@@ -722,12 +621,12 @@
                 date: dateInput
             });
 
-            await window.syncToFirebase();
+            window.saveToLocalStorage();
             renderInventory();
             renderPosSelect();
 
             ['invCode','itemName','itemWhole','itemMarket','itemStock'].forEach(i => document.getElementById(i).value = '');
-            alert("பொருள் வெற்றி கரமாக சேர்க்கப்பட்டது!");
+            alert("பொருள் வெற்றிகரமாக சேர்க்கப்பட்டது!");
         };
 
         function renderInventory() {
@@ -757,10 +656,10 @@
             });
         }
 
-        window.delInv = async function(i) { 
+        window.delInv = function(i) { 
             if(confirm("இந்த பொருளை நீக்க விரும்புகிறீர்களா?")) { 
                 window.inventory.splice(i, 1); 
-                await window.syncToFirebase();
+                window.saveToLocalStorage();
                 renderInventory(); 
                 renderPosSelect();
             } 
@@ -793,7 +692,7 @@
             }
         };
 
-        window.addToBill = async function() {
+        window.addToBill = function() {
             const idx = document.getElementById('posItemSelect').value;
             const price = parseFloat(document.getElementById('salePrice').value) || 0;
             const qty = parseInt(document.getElementById('saleQty').value) || 0;
@@ -821,7 +720,7 @@
 
             window.cart.push({ invIdx: idx, name: itemName, qty, price, total, profit });
             
-            await window.syncToFirebase();
+            window.saveToLocalStorage();
             renderBill();
             renderInventory();
             renderPosSelect();
@@ -831,7 +730,7 @@
             document.getElementById('saleQty').value = '1';
         };
 
-        window.pushToCartDirect = async function(id) {
+        window.pushToCartDirect = function(id) {
             const idx = window.inventory.findIndex(b => String(b.id).trim().toLowerCase() === String(id).trim().toLowerCase());
             if(idx > -1) {
                 const item = window.inventory[idx];
@@ -845,7 +744,7 @@
 
                 window.cart.push({ invIdx: idx, name: itemName, qty: 1, price: item.market, total: item.market, profit });
                 
-                await window.syncToFirebase();
+                window.saveToLocalStorage();
                 renderBill();
                 renderInventory();
                 renderPosSelect();
@@ -874,11 +773,11 @@
             window.calculateTotals();
         }
 
-        window.removeFromCart = async function(idx) {
+        window.removeFromCart = function(idx) {
             const item = window.cart[idx];
             if(item && item.invIdx !== undefined && window.inventory[item.invIdx]) {
                 window.inventory[item.invIdx].stock += item.qty;
-                await window.syncToFirebase();
+                window.saveToLocalStorage();
             }
             window.cart.splice(idx, 1);
             renderBill();
@@ -886,14 +785,14 @@
             renderPosSelect();
         };
 
-        window.clearBill = async function() {
+        window.clearBill = function() {
             window.cart.forEach(c => { 
                 if(c.invIdx !== undefined && window.inventory[c.invIdx]) {
                     window.inventory[c.invIdx].stock += c.qty; 
                 }
             });
             window.cart = []; 
-            await window.syncToFirebase();
+            window.saveToLocalStorage();
             renderBill();
             renderInventory();
             renderPosSelect();
@@ -924,7 +823,7 @@
             return { subtotal, discount, netTotal, paid, balance };
         };
 
-        window.processInvoice = async function(shouldPrint = true) {
+        window.processInvoice = function(shouldPrint = true) {
             if(window.cart.length === 0) { 
                 alert("கார்ட்டில் பொருட்கள் இல்லை!"); 
                 return; 
@@ -949,7 +848,7 @@
             });
 
             window.invoiceCounter++;
-            await window.syncToFirebase();
+            window.saveToLocalStorage();
 
             if (shouldPrint) {
                 document.getElementById('printInvNo').innerText = invId;
@@ -978,7 +877,7 @@
                     window.print();
                 }, 100);
             } else {
-                alert("ஆர்டர் வெற்றிகரமாக சேமிக்கப்பட்டது (Order saved successfully)!");
+                alert("ஆர்டர் வெற்றிகரமாக சேமிக்கப்பட்டது!");
             }
             
             window.cart = [];
@@ -1059,19 +958,19 @@
             });
         }
 
-        window.delInvHist = async function(i) { 
+        window.delInvHist = function(i) { 
             if(confirm("இந்த விற்பனை பதிவை நீக்க விரும்புகிறீர்களா?")) { 
                 window.invoiceHistory.splice(i,1); 
-                await window.syncToFirebase();
+                window.saveToLocalStorage();
                 renderInvoiceHistory(); 
                 updateDashboard();
             } 
         };
 
-        window.clearHistory = async function() {
+        window.clearHistory = function() {
             if(confirm("அனைத்து விற்பனை வரலாற்றையும் முற்றிலும் நீக்க விரும்புகிறீர்களா?")) {
                 window.invoiceHistory = [];
-                await window.syncToFirebase();
+                window.saveToLocalStorage();
                 renderInvoiceHistory();
                 updateDashboard();
             }
@@ -1091,14 +990,14 @@
             renderReloadHistory();
         };
 
-        window.addReload = async function() {
+        window.addReload = function() {
             const tp = document.getElementById('relTP').value.trim();
             const amount = parseFloat(document.getElementById('relAmt').value);
             const date = document.getElementById('relDate').value;
             
             if(tp && amount && date) {
                 window.reloadHistory.push({ tp, amount, date });
-                await window.syncToFirebase();
+                window.saveToLocalStorage();
                 window.switchHistoryTab('rel');
                 document.getElementById('relTP').value = ''; 
                 document.getElementById('relAmt').value = '';
@@ -1107,14 +1006,14 @@
             }
         };
 
-        window.addCompanyPayment = async function() {
+        window.addCompanyPayment = function() {
             const company = document.getElementById('payComp').value.trim();
             const amount = parseFloat(document.getElementById('payAmt').value);
             const date = document.getElementById('payDate').value;
             
             if(company && amount && date) {
                 window.companyPayments.push({ company, amount, date });
-                await window.syncToFirebase();
+                window.saveToLocalStorage();
                 window.switchHistoryTab('pay');
                 document.getElementById('payComp').value = ''; 
                 document.getElementById('payAmt').value = '';
@@ -1159,11 +1058,11 @@
             }
         }
 
-        window.delReloadEntry = async function(origin, id) { 
+        window.delReloadEntry = function(origin, id) { 
             if(confirm("இந்த பதிவை நீக்க விரும்புகிறீர்களா?")) { 
                 if(origin === 'rel') window.reloadHistory.splice(id, 1); 
                 else window.companyPayments.splice(id, 1); 
-                await window.syncToFirebase();
+                window.saveToLocalStorage();
                 renderReloadHistory(); 
             } 
         };

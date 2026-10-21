@@ -158,10 +158,11 @@
             <button id="nav-invhist" onclick="showSection('invoiceHistory')"><i class="fa-solid fa-receipt"></i> Sales History</button>
             <button id="nav-reload" onclick="showSection('reloadSystem')"><i class="fa-solid fa-mobile-screen-button"></i> Reload System</button>
             <button id="nav-reports" onclick="showSection('reports')"><i class="fa-solid fa-chart-pie"></i> Monthly Reports</button>
+            <button id="nav-api" onclick="showSection('apiSettings')"><i class="fa-solid fa-network-wired"></i> API Sync Settings</button>
             <br>
-            <!-- Push Local Data to Cloud Button -->
-            <button onclick="pushLocalToFirebase()" style="color: #2ecc71; font-size: 12px; border: 1px dashed #2ecc71; background: rgba(46, 204, 113, 0.1); margin-top: 10px;">
-                <i class="fa-solid fa-cloud-arrow-up"></i> Push Local Data to Cloud
+            <!-- Sync Data to Cloud API Button -->
+            <button onclick="syncAllWithApi()" style="color: #2ecc71; font-size: 12px; border: 1px dashed #2ecc71; background: rgba(46, 204, 113, 0.1); margin-top: 10px;">
+                <i class="fa-solid fa-cloud-arrow-up"></i> Sync Data with API
             </button>
             
             <button onclick="secureReset()" style="color: #ff4d4d; font-size: 12px; border: 1px dashed #ff4d4d; background: rgba(255, 77, 77, 0.05); margin-top: 10px;">
@@ -420,6 +421,34 @@
                 </div>
             </div>
         </section>
+
+        <!-- API SETTINGS & SYNC SECTION -->
+        <section id="apiSettings" class="card" style="display:none;">
+            <div class="card-title"><i class="fa-solid fa-cloud"></i> Firebase REST API Configuration</div>
+            <p class="text-xs text-slate-500 mb-4">Connect your store to Firebase Realtime Database or custom REST API endpoints to keep inventory and sales synced across multiple devices.</p>
+            
+            <div class="form-grid no-print">
+                <div class="col-span-2">
+                    <label class="block text-xs font-semibold text-slate-700 mb-1">API Base Endpoint URL</label>
+                    <input type="text" id="apiEndpointUrl" placeholder="https://your-app-default-rtdb.firebaseio.com">
+                </div>
+                <div class="col-span-2">
+                    <label class="block text-xs font-semibold text-slate-700 mb-1">API Secret Key / Auth Token (Optional)</label>
+                    <input type="password" id="apiAuthToken" placeholder="Database Auth Secret or Token">
+                </div>
+            </div>
+            
+            <div class="flex gap-3 mt-2 flex-wrap">
+                <button class="btn btn-primary text-xs" onclick="saveApiSettings()"><i class="fa-solid fa-floppy-disk"></i> Save API Configuration</button>
+                <button class="btn btn-success text-xs" onclick="fetchDataFromApi()"><i class="fa-solid fa-cloud-arrow-down"></i> Fetch Cloud Data</button>
+                <button class="btn btn-info text-xs" onclick="syncAllWithApi()"><i class="fa-solid fa-rotate"></i> Sync Local Data to API</button>
+            </div>
+
+            <div class="mt-6 pt-4 border-t border-slate-200">
+                <h4 class="text-sm font-semibold mb-2 text-slate-800">API Connection Logs</h4>
+                <pre id="apiConsoleLog" class="bg-slate-900 text-emerald-400 p-3 rounded-lg text-xs font-mono h-32 overflow-y-auto">Ready to connect to API...</pre>
+            </div>
+        </section>
     </main>
 
     <!-- Printable Invoice Template -->
@@ -468,7 +497,117 @@
         window.activeHistoryTab = 'rel';
         window.html5QrCode = null;
 
+        // API Configuration Settings
+        window.apiConfig = {
+            baseUrl: localStorage.getItem('iist_api_url') || '',
+            authKey: localStorage.getItem('iist_api_key') || ''
+        };
+
         const SYSTEM_PASS = "admin123";
+
+        function logApiMessage(msg) {
+            const consoleLog = document.getElementById('apiConsoleLog');
+            if (consoleLog) {
+                const time = new Date().toLocaleTimeString();
+                consoleLog.innerHTML = `[${time}] ${msg}\n` + consoleLog.innerHTML;
+            }
+            console.log(`[API Log] ${msg}`);
+        }
+
+        window.saveApiSettings = function() {
+            let url = document.getElementById('apiEndpointUrl').value.trim();
+            if (url.endsWith('/')) url = url.slice(0, -1);
+            
+            const key = document.getElementById('apiAuthToken').value.trim();
+            
+            window.apiConfig.baseUrl = url;
+            window.apiConfig.authKey = key;
+
+            localStorage.setItem('iist_api_url', url);
+            localStorage.setItem('iist_api_key', key);
+
+            logApiMessage("API settings saved successfully.");
+            alert("API Endpoint Configuration Saved!");
+        };
+
+        function getFullApiUrl(path) {
+            if (!window.apiConfig.baseUrl) return null;
+            let url = `${window.apiConfig.baseUrl}/${path}.json`;
+            if (window.apiConfig.authKey) {
+                url += `?auth=${window.apiConfig.authKey}`;
+            }
+            return url;
+        }
+
+        window.syncAllWithApi = async function() {
+            const url = getFullApiUrl('storeData');
+            if (!url) {
+                alert("Please configure your API Base URL first in API Sync Settings!");
+                window.showSection('apiSettings');
+                return;
+            }
+
+            logApiMessage("Pushing local data to Cloud API...");
+            try {
+                const payload = {
+                    inventory: window.inventory,
+                    invoiceHistory: window.invoiceHistory,
+                    reloadHistory: window.reloadHistory,
+                    companyPayments: window.companyPayments,
+                    invoiceCounter: window.invoiceCounter,
+                    lastSynced: new Date().toISOString()
+                };
+
+                const res = await fetch(url, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (res.ok) {
+                    logApiMessage("Cloud API Sync successful!");
+                    alert("Local Data successfully synced with API Cloud Database!");
+                } else {
+                    throw new Error(`Server responded with HTTP ${res.status}`);
+                }
+            } catch (err) {
+                logApiMessage("Sync failed: " + err.message);
+                alert("API Sync Failed: " + err.message);
+            }
+        };
+
+        window.fetchDataFromApi = async function() {
+            const url = getFullApiUrl('storeData');
+            if (!url) {
+                alert("Please configure your API Base URL first in API Sync Settings!");
+                return;
+            }
+
+            logApiMessage("Fetching latest data from Cloud API...");
+            try {
+                const res = await fetch(url);
+                if (!res.ok) throw new Error(`HTTP Error ${res.status}`);
+
+                const data = await res.json();
+                if (data) {
+                    if (data.inventory) window.inventory = data.inventory;
+                    if (data.invoiceHistory) window.invoiceHistory = data.invoiceHistory;
+                    if (data.reloadHistory) window.reloadHistory = data.reloadHistory;
+                    if (data.companyPayments) window.companyPayments = data.companyPayments;
+                    if (data.invoiceCounter) window.invoiceCounter = data.invoiceCounter;
+
+                    window.saveToLocalStorage();
+                    refreshUI();
+                    logApiMessage("Successfully pulled data from API!");
+                    alert("Data downloaded from API Cloud & applied!");
+                } else {
+                    logApiMessage("No existing data found at endpoint.");
+                }
+            } catch (err) {
+                logApiMessage("Fetch failed: " + err.message);
+                alert("Failed to fetch API data: " + err.message);
+            }
+        };
 
         // Direct scan and recovery of ALL possible Local Storage Keys
         function loadDirectFromLocalStorage() {
@@ -526,6 +665,13 @@
             document.getElementById('displayDate').innerText = new Date().toLocaleDateString('en-GB');
             document.getElementById('currentDateStr').innerText = new Date().toLocaleDateString('en-GB', { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' });
 
+            if (document.getElementById('apiEndpointUrl')) {
+                document.getElementById('apiEndpointUrl').value = window.apiConfig.baseUrl;
+            }
+            if (document.getElementById('apiAuthToken')) {
+                document.getElementById('apiAuthToken').value = window.apiConfig.authKey;
+            }
+
             // Force immediate local storage recovery
             loadDirectFromLocalStorage();
             document.getElementById('displayInvNo').innerText = 'IIST-' + window.invoiceCounter;
@@ -551,20 +697,13 @@
             }
         };
 
-        // Push Local Storage Data to Firebase Cloud helper
+        // Push Local Storage Data to Cloud API
         window.pushLocalToFirebase = function() {
-            loadDirectFromLocalStorage();
-
-            if (window.inventory.length === 0 && window.invoiceHistory.length === 0 && window.reloadHistory.length === 0) {
-                alert("உங்கள் Local Storage-இல் மாற்றுவதற்கு எந்த தரவும் (Data) இல்லை!");
-                return;
-            }
-
-            alert("உங்கள்Local Storage-இல் " + window.inventory.length + " பொருட்கள் (Books/Stationery) பத்திரமாக உள்ளன! Firebase Config அமைத்த பிறகு இவை Cloud-க்கு ஏற்றப்படும்.");
+            window.syncAllWithApi();
         };
 
         window.showSection = function(id) {
-            const sections = ['dashboard', 'inventory', 'billing', 'invoiceHistory', 'reloadSystem', 'reports'];
+            const sections = ['dashboard', 'inventory', 'billing', 'invoiceHistory', 'reloadSystem', 'reports', 'apiSettings'];
             sections.forEach(s => document.getElementById(s).style.display = s === id ? 'block' : 'none');
             
             document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
@@ -575,11 +714,12 @@
                 'billing': 'nav-bill', 
                 'invoiceHistory': 'nav-invhist', 
                 'reloadSystem': 'nav-reload', 
-                'reports': 'nav-reports' 
+                'reports': 'nav-reports',
+                'apiSettings': 'nav-api'
             };
             
             if(navMap[id]) document.getElementById(navMap[id]).classList.add('active');
-            document.getElementById('page-title').innerText = id.toUpperCase().replace('SYSTEM', ' SYSTEM');
+            document.getElementById('page-title').innerText = id.toUpperCase().replace('SYSTEM', ' SYSTEM').replace('APISETTINGS', 'API SETTINGS');
             
             const sidebar = document.getElementById('sidebar');
             if(sidebar.classList.contains('open')) window.toggleSidebar();

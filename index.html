@@ -98,6 +98,11 @@
 
         #reader { width: 100%; max-width: 380px; margin: 0 auto; border-radius: 8px; overflow: hidden; }
 
+        /* Modal Styles */
+        .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 200; opacity: 0; pointer-events: none; transition: opacity 0.2s ease; }
+        .modal-overlay.active { opacity: 1; pointer-events: auto; }
+        .modal-card { background: white; border-radius: 12px; width: 90%; max-width: 500px; padding: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.15); }
+
         /* Thermal Printing CSS */
         #printable-invoice { display: none; }
         #sidebar-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 90; }
@@ -220,16 +225,41 @@
         <section id="inventory" class="card" style="display:none;">
             <div class="card-title"><i class="fa-solid fa-square-plus"></i> Add New Inventory Item</div>
             <div class="form-grid no-print">
-                <input type="text" id="invCode" placeholder="Item Code (e.g. ITEM-101)">
-                <input type="text" id="itemName" placeholder="Item Name">
-                <input type="number" id="itemWhole" placeholder="Cost Price (Cost)">
-                <input type="number" id="itemMarket" placeholder="Selling Price (Market)">
-                <input type="number" id="itemStock" placeholder="Quantity">
-                <input type="date" id="itemDate">
-                <button class="btn btn-primary" onclick="addItem()"><i class="fa-solid fa-plus"></i> Save Item</button>
+                <div>
+                    <label class="text-xs font-semibold text-slate-600 mb-1 block">Item Prefix (e.g. B5)</label>
+                    <input type="text" id="invCode" placeholder="Code (e.g. B5)">
+                </div>
+                <div>
+                    <label class="text-xs font-semibold text-slate-600 mb-1 block">Item Name</label>
+                    <input type="text" id="itemName" placeholder="Item Name (e.g. B5 Book)">
+                </div>
+                <div>
+                    <label class="text-xs font-semibold text-slate-600 mb-1 block">Cost Price (LKR)</label>
+                    <input type="number" id="itemWhole" placeholder="Cost Price">
+                </div>
+                <div>
+                    <label class="text-xs font-semibold text-slate-600 mb-1 block">Selling Price (LKR)</label>
+                    <input type="number" id="itemMarket" placeholder="Selling Price">
+                </div>
+                <div>
+                    <label class="text-xs font-semibold text-slate-600 mb-1 block">Initial Quantity</label>
+                    <input type="number" id="itemStock" placeholder="Quantity">
+                </div>
+                <div>
+                    <label class="text-xs font-semibold text-slate-600 mb-1 block">Date</label>
+                    <input type="date" id="itemDate">
+                </div>
+            </div>
+            <div class="mb-4">
+                <button class="btn btn-primary" onclick="addItem()"><i class="fa-solid fa-plus"></i> Save Item (Auto Code)</button>
             </div>
 
-            <div class="card-title" style="margin-top: 25px;"><i class="fa-solid fa-list"></i> Current Inventory List</div>
+            <div class="card-title flex justify-between items-center flex-wrap gap-2" style="margin-top: 25px;">
+                <span><i class="fa-solid fa-list"></i> Current Inventory List</span>
+                <div class="w-full md:w-72">
+                    <input type="text" id="invSearchInput" onkeyup="filterInventory()" placeholder="🔍 Find item name, code or price..." class="text-xs">
+                </div>
+            </div>
             <div class="table-responsive">
                 <table>
                     <thead>
@@ -452,6 +482,55 @@
         </section>
     </main>
 
+    <!-- EDIT / RESTOCK ITEM MODAL -->
+    <div id="editItemModal" class="modal-overlay no-print">
+        <div class="modal-card">
+            <div class="flex justify-between items-center mb-4 pb-2 border-b">
+                <h3 class="text-base font-bold text-slate-800"><i class="fa-solid fa-pen-to-square text-indigo-600"></i> Edit / Restock Item</h3>
+                <button onclick="closeEditModal()" class="text-slate-400 hover:text-slate-600 text-lg"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <input type="hidden" id="editItemIndex">
+            <div class="space-y-3">
+                <div>
+                    <label class="text-xs font-semibold text-slate-600 mb-1 block">Item Code</label>
+                    <!-- UPDATED: Made item code editable instead of readonly -->
+                    <input type="text" id="editItemCode" placeholder="Item Code (e.g. B5 01)">
+                </div>
+                <div>
+                    <label class="text-xs font-semibold text-slate-600 mb-1 block">Item Name</label>
+                    <input type="text" id="editItemName">
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="text-xs font-semibold text-slate-600 mb-1 block">Cost Price (LKR)</label>
+                        <input type="number" id="editItemWhole">
+                    </div>
+                    <div>
+                        <label class="text-xs font-semibold text-slate-600 mb-1 block">Selling Price (LKR)</label>
+                        <input type="number" id="editItemMarket">
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="text-xs font-semibold text-slate-600 mb-1 block">Add New Stock (Stock Incoming)</label>
+                        <input type="number" id="editItemAddStock" value="0" placeholder="+ Add Stock">
+                    </div>
+                    <div>
+                        <label class="text-xs font-semibold text-slate-600 mb-1 block">Date Added / Restocked</label>
+                        <input type="date" id="editItemDate">
+                    </div>
+                </div>
+                <p class="text-xs text-indigo-600 bg-indigo-50 p-2 rounded border border-indigo-100">
+                    <i class="fa-solid fa-circle-info"></i> Note: Entering stock count above will add to existing stock quantity.
+                </p>
+            </div>
+            <div class="mt-5 flex justify-end gap-2">
+                <button class="btn bg-slate-200 text-slate-700 hover:bg-slate-300 text-xs" onclick="closeEditModal()">Cancel</button>
+                <button class="btn btn-primary text-xs" onclick="saveEditedItem()"><i class="fa-solid fa-floppy-disk"></i> Update Item</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Printable Invoice Template -->
     <div id="printable-invoice">
         <div style="text-align: center;">
@@ -506,6 +585,26 @@
         };
 
         const SYSTEM_PASS = "admin123";
+
+        // Helper function to auto-generate item codes sequentially (e.g. B5 -> B5 01, B5 02)
+        function generateAutoItemCode(prefix) {
+            let cleanPrefix = prefix ? prefix.trim().toUpperCase() : 'ITEM';
+            let maxNum = 0;
+
+            window.inventory.forEach(item => {
+                if (item.id && item.id.toUpperCase().startsWith(cleanPrefix)) {
+                    let sub = item.id.substring(cleanPrefix.length).trim();
+                    let num = parseInt(sub, 10);
+                    if (!isNaN(num) && num > maxNum) {
+                        maxNum = num;
+                    }
+                }
+            });
+
+            let nextNum = maxNum + 1;
+            let formattedNum = nextNum < 10 ? '0' + nextNum : nextNum;
+            return `${cleanPrefix} ${formattedNum}`;
+        }
 
         // Send Bill to Customer via WhatsApp
         function sendBillToCustomerWhatsApp(phone, custName, invId, netTotal, itemNames) {
@@ -781,7 +880,8 @@
                 return;
             }
 
-            const code = codeInput || ('BK-' + (window.inventory.length + 101));
+            // Auto-generate code e.g. B5 -> B5 01, B5 02
+            const code = generateAutoItemCode(codeInput);
 
             window.inventory.push({
                 id: code,
@@ -797,35 +897,116 @@
             renderPosSelect();
 
             ['invCode','itemName','itemWhole','itemMarket','itemStock'].forEach(i => document.getElementById(i).value = '');
-            alert("பொருள் வெற்றிகரமாக சேர்க்கப்பட்டது!");
+            alert(`பொருள் வெற்றிகரமாக சேர்க்கப்பட்டது! (Code: ${code})`);
+        };
+
+        window.filterInventory = function() {
+            renderInventory();
         };
 
         function renderInventory() {
             const body = document.getElementById('inventoryBody'); 
             body.innerHTML = '';
 
-            if (window.inventory.length === 0) {
-                body.innerHTML = '<tr><td colspan="6" style="text-align:center; color:#64748b;">No items available in inventory.</td></tr>';
+            const filterQuery = (document.getElementById('invSearchInput')?.value || '').toLowerCase().trim();
+
+            // Sort inventory alphabetically by item name before displaying
+            const sortedInventory = [...window.inventory].sort((a, b) => {
+                const nameA = (a.name || '').toLowerCase();
+                const nameB = (b.name || '').toLowerCase();
+                return nameA.localeCompare(nameB, undefined, { numeric: true, sensitivity: 'base' });
+            });
+
+            const itemsToDisplay = sortedInventory.filter(it => {
+                if (!filterQuery) return true;
+                const name = (it.name || '').toLowerCase();
+                const code = (it.id || '').toLowerCase();
+                const market = String(it.market || '');
+                const whole = String(it.whole || '');
+                return name.includes(filterQuery) || code.includes(filterQuery) || market.includes(filterQuery) || whole.includes(filterQuery);
+            });
+
+            if (itemsToDisplay.length === 0) {
+                body.innerHTML = '<tr><td colspan="6" style="text-align:center; color:#64748b;">No items found matching criteria.</td></tr>';
                 return;
             }
 
-            window.inventory.forEach((it, i) => {
-                const itemId = it.id || ('BK-' + (i + 101));
+            itemsToDisplay.forEach((it) => {
+                const actualIndex = window.inventory.indexOf(it);
+                const itemId = it.id || ('BK-' + (actualIndex + 101));
                 const name = it.name || 'Unnamed Item';
                 body.innerHTML += `<tr>
                     <td><strong>${itemId}</strong><br><small style="color:#64748b;">${it.date || ''}</small></td>
                     <td><strong>${name}</strong></td>
                     <td>ரூ. ${parseFloat(it.whole || 0).toFixed(2)}</td>
-                    <td>ரூ. ${parseFloat(it.market || 0).toFixed(2)}</td>
+                    <td><strong class="text-indigo-600">ரூ. ${parseFloat(it.market || 0).toFixed(2)}</strong></td>
                     <td><span style="font-weight:bold; color:${it.stock > 0 ? '#16a34a' : '#dc2626'}">${it.stock}</span></td>
-                    <td class="no-print">
-                        <button class="btn btn-danger" style="font-size:11px; padding:5px 10px;" onclick="delInv(${i})">
+                    <td class="no-print flex gap-1">
+                        <button class="btn btn-warning" style="font-size:11px; padding:5px 10px;" onclick="openEditModal(${actualIndex})">
+                            <i class="fa-solid fa-pen"></i> Edit / Restock
+                        </button>
+                        <button class="btn btn-danger" style="font-size:11px; padding:5px 10px;" onclick="delInv(${actualIndex})">
                             <i class="fa-solid fa-trash"></i>
                         </button>
                     </td>
                 </tr>`;
             });
         }
+
+        window.openEditModal = function(index) {
+            const item = window.inventory[index];
+            if (!item) return;
+
+            document.getElementById('editItemIndex').value = index;
+            document.getElementById('editItemCode').value = item.id || '';
+            document.getElementById('editItemName').value = item.name || '';
+            document.getElementById('editItemWhole').value = item.whole || 0;
+            document.getElementById('editItemMarket').value = item.market || 0;
+            document.getElementById('editItemAddStock').value = 0;
+            document.getElementById('editItemDate').value = item.date || new Date().toISOString().split('T')[0];
+
+            document.getElementById('editItemModal').classList.add('active');
+        };
+
+        window.closeEditModal = function() {
+            document.getElementById('editItemModal').classList.remove('active');
+        };
+
+        window.saveEditedItem = function() {
+            const index = parseInt(document.getElementById('editItemIndex').value);
+            if (isNaN(index) || !window.inventory[index]) return;
+
+            const code = document.getElementById('editItemCode').value.trim();
+            const name = document.getElementById('editItemName').value.trim();
+            const whole = parseFloat(document.getElementById('editItemWhole').value) || 0;
+            const market = parseFloat(document.getElementById('editItemMarket').value) || 0;
+            const addStock = parseInt(document.getElementById('editItemAddStock').value) || 0;
+            const date = document.getElementById('editItemDate').value || new Date().toISOString().split('T')[0];
+
+            if (!name) {
+                alert("தயவுசெய்து பொருளின் பெயரை உள்ளிடவும்!");
+                return;
+            }
+
+            if (!code) {
+                alert("தயவுசெய்து பொருளின் குறியீட்டை (Item Code) உள்ளிடவும்!");
+                return;
+            }
+
+            window.inventory[index].id = code;
+            window.inventory[index].name = name;
+            window.inventory[index].whole = whole;
+            window.inventory[index].market = market;
+            window.inventory[index].stock = (window.inventory[index].stock || 0) + addStock;
+            window.inventory[index].date = date;
+
+            window.saveToLocalStorage();
+            renderInventory();
+            renderPosSelect();
+            closeEditModal();
+
+            alert("பொருள் மற்றும் கையிருப்பு வெற்றியளிப்பாக புதுப்பிக்கப்பட்டது!");
+        };
 
         window.delInv = function(i) { 
             if(confirm("இந்த பொருளை நீக்க விரும்புகிறீர்களா?")) { 
@@ -840,14 +1021,27 @@
             const select = document.getElementById('posItemSelect');
             select.innerHTML = '<option value="">Choose Item from Inventory...</option>';
             
-            window.inventory.forEach((item, idx) => {
-                const name = item.name && item.name.trim() !== '' ? item.name : 'Item #' + (idx + 1);
+            // Map original indices before sorting for seamless selection logic
+            const mappedInventory = window.inventory.map((item, originalIndex) => ({
+                item,
+                originalIndex
+            }));
+
+            // Sort alphabetically by name (A-Z)
+            mappedInventory.sort((a, b) => {
+                const nameA = (a.item.name || '').toLowerCase();
+                const nameB = (b.item.name || '').toLowerCase();
+                return nameA.localeCompare(nameB, undefined, { numeric: true, sensitivity: 'base' });
+            });
+
+            mappedInventory.forEach(({ item, originalIndex }) => {
+                const name = item.name && item.name.trim() !== '' ? item.name : 'Item #' + (originalIndex + 1);
                 const price = parseFloat(item.market || 0).toFixed(2);
                 const stock = item.stock !== undefined ? item.stock : 0;
                 const code = item.id ? `${item.id} - ` : '';
 
                 const option = document.createElement('option');
-                option.value = idx;
+                option.value = originalIndex;
                 option.textContent = `${code}${name} - ரூ.${price} (Stock: ${stock})`;
                 select.appendChild(option);
             });
